@@ -1,6 +1,6 @@
 __precompile__()
 
-module KernelDensity
+module KernelDensityW
 
 using Compat
 using StatsBase
@@ -9,7 +9,7 @@ using Optim
 using Interpolations
 
 import Base: conv
-import StatsBase: RealVector, RealMatrix
+import StatsBase: RealVector, RealMatrix, WeightVec
 import Distributions: twoπ, pdf
 
 export kde, kde_lscv, UnivariateKDE, BivariateKDE, InterpKDE, pdf

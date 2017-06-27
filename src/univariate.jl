@@ -65,24 +65,27 @@ function kde_range(boundary::Tuple{Real,Real}, npoints::Int)
     step = (hi - lo) / (npoints-1)
     lo:step:hi
 end
-
+function default_weights(data::RealVector)
+    n = length(data)
+    WeightVec(fill(1/n, n))
+ end
 # tabulate data for kde
-function tabulate(data::RealVector, midpoints::Range)
+function tabulate(data::RealVector, midpoints::Range, weights::WeightVec)
     ndata = length(data)
     npoints = length(midpoints)
     s = step(midpoints)
 
     # Set up a grid for discretized data
     grid = zeros(Float64, npoints)
-    ainc = 1.0 / (ndata*s*s)
+    ainc = 1.0 / (weights.sum*s*s)
 
     # weighted discretization (cf. Jones and Lotwick)
-    for x in data
+    for (x, w) in zip(data,weights.values)
         k = searchsortedfirst(midpoints,x)
         j = k-1
         if 1 <= j <= npoints-1
-            grid[j] += (midpoints[k]-x)*ainc
-            grid[k] += (x-midpoints[j])*ainc
+            grid[j] += (midpoints[k]-x)*ainc*w
+            grid[k] += (x-midpoints[j])*ainc*w
         end
     end
 
@@ -119,30 +122,31 @@ function conv(k::UnivariateKDE, dist::UnivariateDistribution)
 end
 
 # main kde interface methods
-function kde(data::RealVector, midpoints::Range, dist::UnivariateDistribution)
-    k = tabulate(data, midpoints)
+function kde(data::RealVector, midpoints::Range,weights::WeightVec, dist::UnivariateDistribution)
+    k = tabulate(data, midpoints, weights)
     conv(k,dist)
 end
 
 function kde(data::RealVector, dist::UnivariateDistribution;
+			weights::WeightVec = default_weights(data),
              boundary::Tuple{Real,Real}=kde_boundary(data,std(dist)), npoints::Int=2048)
 
     midpoints = kde_range(boundary,npoints)
-    kde(data,midpoints,dist)
+    kde(data,midpoints,weights,dist)
 end
 
 function kde(data::RealVector, midpoints::Range;
-            bandwidth=default_bandwidth(data), kernel=Normal)
+            bandwidth=default_bandwidth(data), weights=default_weights(data),kernel=Normal)
     bandwidth > 0.0 || error("Bandwidth must be positive")
     dist = kernel_dist(kernel,bandwidth)
-    kde(data,midpoints,dist)
+    kde(data,midpoints,weights,dist)
 end
 
-function kde(data::RealVector; bandwidth=default_bandwidth(data), kernel=Normal,
+function kde(data::RealVector; bandwidth=default_bandwidth(data),weights=default_weights(data),  kernel=Normal,
              npoints::Int=2048, boundary::Tuple{Real,Real}=kde_boundary(data,bandwidth))
     bandwidth > 0.0 || error("Bandwidth must be positive")
     dist = kernel_dist(kernel,bandwidth)
-    kde(data,dist;boundary=boundary,npoints=npoints)
+    kde(data,dist;weights=weights,boundary=boundary,npoints=npoints)
 end
 
 # Select bandwidth using least-squares cross validation, from:
@@ -151,11 +155,12 @@ end
 #   sections 3.4.3 (pp. 48-52) and 3.5 (pp. 61-66)
 
 function kde_lscv(data::RealVector, midpoints::Range;
+					weights=default_weights(data),
                   kernel=Normal,
                   bandwidth_range::Tuple{Real,Real}=(h=default_bandwidth(data); (0.25*h,1.5*h)))
 
     ndata = length(data)
-    k = tabulate(data, midpoints)
+    k = tabulate(data, midpoints, weights)
 
     # the ft here is K/ba*sqrt(2pi) * u(s), it is K times the Yl in Silverman's book
     K = length(k.density)
