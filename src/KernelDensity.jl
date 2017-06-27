@@ -1,6 +1,6 @@
 __precompile__()
 
-module KernelDensity
+module KernelDensityW
 
 using Compat
 using StatsBase
